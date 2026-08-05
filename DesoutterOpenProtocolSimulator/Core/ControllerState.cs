@@ -116,17 +116,26 @@ namespace DesoutterSimulator.Core
 
     public class TighteningResult
     {
-        public long TighteningId { get; set; }
+        // 现有属性（保持不变）
+        public int CellId { get; set; } = 1;
+        public int ChannelId { get; set; } = 1;
         public string VIN { get; set; } = "KPOL3456JKLO897";
         public int JobId { get; set; } = 1;
         public int PsetId { get; set; } = 1;
-        public int ChannelId { get; set; } = 1;
+        public int Strategy { get; set; } = 2;
+        public string StrategyOptions { get; set; } = "00000";
         public int BatchSize { get; set; } = 10;
         public int BatchCounter { get; set; } = 1;
-        public int Status { get; set; } = 1; // 0=NOK, 1=OK
+        public int Status { get; set; } = 1;           // 0=NOK, 1=OK
         public int BatchStatus { get; set; } = 1;
         public int TorqueStatus { get; set; } = 1;
         public int AngleStatus { get; set; } = 1;
+        public int RundownAngleStatus { get; set; } = 1;
+        public int CurrentMonitoringStatus { get; set; } = 1;
+        public int SelftapStatus { get; set; } = 1;
+        public int PrevailTorqueStatus { get; set; } = 1;
+        public int CompensateStatus { get; set; } = 1;
+        public string TighteningErrors { get; set; } = "0000000000";
         public double TorqueMin { get; set; } = 5.0;
         public double TorqueMax { get; set; } = 15.0;
         public double TorqueTarget { get; set; } = 10.0;
@@ -135,16 +144,6 @@ namespace DesoutterSimulator.Core
         public int AngleMax { get; set; } = 360;
         public int AngleTarget { get; set; } = 180;
         public int Angle { get; set; } = 185;
-        public DateTime TimeStamp { get; set; } = DateTime.Now;
-        public DateTime PsetChangeTime { get; set; } = DateTime.Now.AddDays(-1);
-        public int Strategy { get; set; } = 2;
-        public string StrategyOptions { get; set; } = "00000";
-        public int RundownAngleStatus { get; set; } = 1;
-        public int CurrentMonitoringStatus { get; set; } = 1;
-        public int SelftapStatus { get; set; } = 1;
-        public int PrevailTorqueStatus { get; set; } = 1;
-        public int CompensateStatus { get; set; } = 1;
-        public string TighteningErrors { get; set; } = "0000000000";
         public int RundownAngleMin { get; set; } = 0;
         public int RundownAngleMax { get; set; } = 100;
         public int RundownAngle { get; set; } = 50;
@@ -157,11 +156,25 @@ namespace DesoutterSimulator.Core
         public double PrevailTorqueMin { get; set; } = 1.0;
         public double PrevailTorqueMax { get; set; } = 5.0;
         public double PrevailTorque { get; set; } = 3.0;
+        public long TighteningId { get; set; }
         public int JobSequence { get; set; } = 12345;
         public int SyncTighteningId { get; set; } = 0;
         public string ToolSerialNumber { get; set; } = "C341212025487";
-        public int CellId { get; set; } = 1;
-        public string ParameterSetName { get; set; } = "Pset_001";
+        public DateTime TimeStamp { get; set; } = DateTime.Now;
+        public DateTime PsetChangeTime { get; set; } = DateTime.Now.AddDays(-1);
+
+        // ========== 新增字段（修订版 3~7） ==========
+        public string ParameterSetName { get; set; } = "Pset_001";          // 47
+        public int TorqueValuesUnit { get; set; } = 1;                      // 48 (1=Nm)
+        public int ResultType { get; set; } = 1;                            // 49 (1=Tightening)
+        public string IdentifierResultPart2 { get; set; } = "";             // 50
+        public string IdentifierResultPart3 { get; set; } = "";             // 51
+        public string IdentifierResultPart4 { get; set; } = "";             // 52
+        public string CustomerTighteningErrorCode { get; set; } = "0000";   // 53
+        public long PrevailTorqueCompensateValue { get; set; } = 0;         // 54 (乘以100)
+        public string TighteningErrorStatus2 { get; set; } = "0000000000";  // 55
+        public int CompensatedAngle { get; set; } = 0;                      // 56 (乘以100)
+        public int FinalAngleDecimal { get; set; } = 0;                    // 57 (乘以100)
     }
 
     public class ControllerState

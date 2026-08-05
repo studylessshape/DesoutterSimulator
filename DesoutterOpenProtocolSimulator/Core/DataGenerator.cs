@@ -46,14 +46,18 @@ namespace DesoutterSimulator.Core
         {
             var id = Interlocked.Increment(ref _currentId);
             var isOk = _random.Next(100) < 90;
+            var psetId = _random.Next(1, 11);
 
             return new TighteningResult
             {
-                TighteningId = id,
+                // 原有属性
+                CellId = 1,
+                ChannelId = 1,
                 VIN = $"VIN_{_random.Next(100000):D6}",
                 JobId = _random.Next(1, 6),
-                PsetId = _random.Next(1, 11),
-                ChannelId = 1,
+                PsetId = psetId,
+                Strategy = 2,
+                StrategyOptions = "00000",
                 BatchSize = 10,
                 BatchCounter = _random.Next(1, 11),
                 Status = isOk ? 1 : 0,
@@ -70,8 +74,6 @@ namespace DesoutterSimulator.Core
                 Angle = 180 + _random.Next(-30, 30),
                 TimeStamp = DateTime.Now,
                 PsetChangeTime = DateTime.Now.AddDays(-_random.Next(1, 30)),
-                Strategy = 2,
-                StrategyOptions = "00000",
                 RundownAngleStatus = isOk ? 1 : _random.Next(3),
                 CurrentMonitoringStatus = 1,
                 SelftapStatus = 1,
@@ -92,9 +94,20 @@ namespace DesoutterSimulator.Core
                 PrevailTorque = 3.0 + (_random.NextDouble() - 0.5) * 2.0,
                 JobSequence = _random.Next(10000, 99999),
                 SyncTighteningId = _random.Next(1, 99999),
-                ToolSerialNumber = $"C{_random.NextInt64(1000000000000, 9999999999999):D13}", // .NET 6+,
-                CellId = 1,
-                ParameterSetName = $"Pset_{_random.Next(1, 11):D3}",
+                ToolSerialNumber = $"C{_random.NextInt64(1000000000000, 9999999999999):D13}",
+
+                // 新增字段
+                ParameterSetName = $"Pset_{psetId:D3}",
+                TorqueValuesUnit = 1,   // Nm
+                ResultType = 1,         // Tightening
+                IdentifierResultPart2 = "",
+                IdentifierResultPart3 = "",
+                IdentifierResultPart4 = "",
+                CustomerTighteningErrorCode = "0000",
+                PrevailTorqueCompensateValue = (long)Math.Abs((_random.NextDouble() - 0.5) * 2.0 * 100),
+                TighteningErrorStatus2 = "0000000000",
+                CompensatedAngle = _random.Next(0, 360) * 100,  // 乘以100，7位
+                FinalAngleDecimal = (int)((180 + (_random.NextDouble() - 0.5) * 60) * 100)  // 7位
             };
         }
 

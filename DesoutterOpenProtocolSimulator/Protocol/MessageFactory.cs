@@ -81,21 +81,20 @@ namespace DesoutterSimulator.Protocol
 
         private static string BuildTighteningData(TighteningResult result, int revision)
         {
-            // 时间戳固定 19 字符
             var timestamp = result.TimeStamp.ToString("yyyy-MM-dd:HH:mm:ss");
             var psetChangeTime = result.PsetChangeTime.ToString("yyyy-MM-dd:HH:mm:ss");
 
-            // 浮点数转整数
-            long torqueMin = (long)(result.TorqueMin * 100);
-            long torqueMax = (long)(result.TorqueMax * 100);
-            long torqueTarget = (long)(result.TorqueTarget * 100);
-            long torque = (long)(result.Torque * 100);
-            long selftapMin = (long)(result.SelftapMin * 100);
-            long selftapMax = (long)(result.SelftapMax * 100);
-            long selftapTorque = (long)(result.SelftapTorque * 100);
-            long prevailMin = (long)(result.PrevailTorqueMin * 100);
-            long prevailMax = (long)(result.PrevailTorqueMax * 100);
-            long prevailTorque = (long)(result.PrevailTorque * 100);
+            // 浮点数转整数（取绝对值确保无符号）
+            long torqueMin = Math.Abs((long)(result.TorqueMin * 100));
+            long torqueMax = Math.Abs((long)(result.TorqueMax * 100));
+            long torqueTarget = Math.Abs((long)(result.TorqueTarget * 100));
+            long torque = Math.Abs((long)(result.Torque * 100));
+            long selftapMin = Math.Abs((long)(result.SelftapMin * 100));
+            long selftapMax = Math.Abs((long)(result.SelftapMax * 100));
+            long selftapTorque = Math.Abs((long)(result.SelftapTorque * 100));
+            long prevailMin = Math.Abs((long)(result.PrevailTorqueMin * 100));
+            long prevailMax = Math.Abs((long)(result.PrevailTorqueMax * 100));
+            long prevailTorque = Math.Abs((long)(result.PrevailTorque * 100));
 
             // 辅助函数：确保字符串精确长度
             string PadField(string value, int length, bool padLeft = false, char padChar = ' ')
@@ -105,18 +104,25 @@ namespace DesoutterSimulator.Protocol
                 return padLeft ? value.PadLeft(length, padChar) : value.PadRight(length, padChar);
             }
 
-            // 固定长度字段值
+            // 固定长度字符串字段
             string controllerName = PadField("Airbag1", 25);
             string vin = PadField(result.VIN, 25);
             string toolSerial = PadField(result.ToolSerialNumber, 14);
             string strategyOptions = PadField(result.StrategyOptions, 5, true, '0');
             string tighteningErrors = PadField(result.TighteningErrors, 10, true, '0');
+            string psetName = PadField(result.ParameterSetName, 25);
+            string idPart2 = PadField(result.IdentifierResultPart2, 25);
+            string idPart3 = PadField(result.IdentifierResultPart3, 25);
+            string idPart4 = PadField(result.IdentifierResultPart4, 25);
+            string customerErrorCode = PadField(result.CustomerTighteningErrorCode, 4, true, '0');
+            string errorStatus2 = PadField(result.TighteningErrorStatus2, 10, true, '0');
 
+            // ========== 修订版本 7：完整键值对（01~57） ==========
             if (revision == 7)
             {
-                var sb = new System.Text.StringBuilder(400);
+                var sb = new System.Text.StringBuilder(700);
 
-                // 字段 01 ~ 46（与修订版 2 相同）
+                // 01~46（修订版 2）
                 sb.Append("01").AppendFormat("{0:D4}", result.CellId);
                 sb.Append("02").AppendFormat("{0:D2}", result.ChannelId);
                 sb.Append("03").Append(controllerName);
@@ -164,21 +170,50 @@ namespace DesoutterSimulator.Protocol
                 sb.Append("45").Append(timestamp);
                 sb.Append("46").Append(psetChangeTime);
 
-                // 字段 47：ParameterSetName（修订版 3 新增）
-                string psetName = result.ParameterSetName.PadRight(25);
+                // 47~49（修订版 3）
                 sb.Append("47").Append(psetName);
+                sb.Append("48").AppendFormat("{0:D1}", result.TorqueValuesUnit);
+                sb.Append("49").AppendFormat("{0:D2}", result.ResultType);
+
+                // 50~52（修订版 4）
+                sb.Append("50").Append(idPart2);
+                sb.Append("51").Append(idPart3);
+                sb.Append("52").Append(idPart4);
+
+                // 53（修订版 5）
+                sb.Append("53").Append(customerErrorCode);
+
+                // 54~55（修订版 6）使用绝对值
+                long pvtComp = Math.Abs(result.PrevailTorqueCompensateValue);
+                sb.Append("54").AppendFormat("{0:D6}", pvtComp);
+                sb.Append("55").Append(errorStatus2);
+
+                // 56~57（修订版 7）使用绝对值
+                int compAngle = Math.Abs(result.CompensatedAngle);
+                sb.Append("56").AppendFormat("{0:D7}", compAngle);
+                int finalAngleDec = Math.Abs(result.FinalAngleDecimal);
+                sb.Append("57").AppendFormat("{0:D7}", finalAngleDec);
 
                 string data = sb.ToString();
 
-                // 校验长度：365（01~46） + 27（47） = 392
-                if (data.Length != 392)
-                {
-                    Logger.Warning($"修订版7数据长度异常：期望392，实际{data.Length}");
-                }
+                // 长度校验（期望值 = 每个字段 2 字节 key + 值长度）
+                int[] lengths = { 4,2,25,25,4,3,2,5,4,4,1,1,1,1,1,1,1,1,1,10,
+                          6,6,6,6,5,5,5,5,5,5,5,3,3,3,6,6,6,6,6,6,
+                          10,5,5,14,19,19,   // 01~46
+                          25,1,2,           // 47~49
+                          25,25,25,         // 50~52
+                          4,                // 53
+                          6,10,             // 54~55
+                          7,7 };            // 56~57
+                int expected = 0;
+                for (int i = 0; i < lengths.Length; i++) expected += 2 + lengths[i];
+                if (data.Length != expected)
+                    Logger.Warning($"修订版7数据长度异常：期望{expected}，实际{data.Length}");
+
                 return data;
             }
 
-            // ========== 标准修订版本 1-6、998、999 ==========
+            // ========== 标准修订版本 1~6、998、999 ==========
             return revision switch
             {
                 1 => $"0001{result.ChannelId:D2}Airbag1              {result.VIN.PadRight(25)}{result.JobId:D2}{result.PsetId:D3}{result.BatchSize:D4}{result.BatchCounter:D4}{result.Status}{result.TorqueStatus}{result.AngleStatus}{torqueMin:D6}{torqueMax:D6}{torqueTarget:D6}{torque:D6}{result.AngleMin:D5}{result.AngleMax:D5}{result.AngleTarget:D5}{result.Angle:D5}{timestamp}{psetChangeTime}{result.BatchStatus}{result.TighteningId:D10}",
