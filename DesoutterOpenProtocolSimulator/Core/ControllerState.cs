@@ -161,6 +161,7 @@ namespace DesoutterSimulator.Core
         public int SyncTighteningId { get; set; } = 0;
         public string ToolSerialNumber { get; set; } = "C341212025487";
         public int CellId { get; set; } = 1;
+        public string ParameterSetName { get; set; } = "Pset_001";
     }
 
     public class ControllerState

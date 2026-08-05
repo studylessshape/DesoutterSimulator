@@ -94,6 +94,7 @@ namespace DesoutterSimulator.Core
                 SyncTighteningId = _random.Next(1, 99999),
                 ToolSerialNumber = $"C{_random.NextInt64(1000000000000, 9999999999999):D13}", // .NET 6+,
                 CellId = 1,
+                ParameterSetName = $"Pset_{_random.Next(1, 11):D3}",
             };
         }
 
