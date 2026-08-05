@@ -10,8 +10,8 @@ namespace DesoutterSimulatorWpf.Converters
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             if (value is bool b && b)
-                return Brushes.Green;
-            return Brushes.Red;
+                return new SolidColorBrush(Colors.Green);
+            return new SolidColorBrush(Colors.Red);
         }
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotImplementedException();

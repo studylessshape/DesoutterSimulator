@@ -9,26 +9,43 @@ using DesoutterSimulatorWpf.Services.Protocol;
 
 namespace DesoutterSimulatorWpf.ViewModels
 {
-    public class GunViewModel : INotifyPropertyChanged
+    public class GunViewModel : INotifyPropertyChanged, IDisposable
     {
         private readonly SimulatorEngine _engine;
         private readonly GunState _state = new GunState();
         private bool _isRunning;
+        private readonly RelayCommand _startCommand;
+        private readonly RelayCommand _stopCommand;
 
         public GunConfig Config { get; }
-
         public GunState State => _state;
-        public bool IsRunning { get => _isRunning; set { _isRunning = value; OnPropertyChanged(); } }
 
-        public ICommand StartCommand { get; }
-        public ICommand StopCommand { get; }
-        public ICommand SendTighteningCommand { get; }
+        public bool IsRunning
+        {
+            get => _isRunning;
+            set
+            {
+                if (_isRunning != value)
+                {
+                    _isRunning = value;
+                    OnPropertyChanged();
+                    // 关键：通知命令重新评估 CanExecute
+                    _startCommand.RaiseCanExecuteChanged();
+                    _stopCommand.RaiseCanExecuteChanged();
+                }
+            }
+        }
 
-        // 用于手动发送的参数
+        // 手动发送参数（绑定到UI）
         public string VIN { get; set; } = "VIN_TEST";
         public double Torque { get; set; } = 10.0;
         public int Angle { get; set; } = 180;
         public int PsetId { get; set; } = 1;
+
+        public ICommand StartCommand => _startCommand;
+        public ICommand StopCommand => _stopCommand;
+
+        public event EventHandler StateChanged;
 
         public GunViewModel(GunConfig config)
         {
@@ -37,9 +54,8 @@ namespace DesoutterSimulatorWpf.ViewModels
             _engine.StateChanged += OnEngineStateChanged;
             _engine.TighteningGenerated += OnTighteningGenerated;
 
-            StartCommand = new RelayCommand(() => _ = StartAsync());
-            StopCommand = new RelayCommand(() => Stop());
-            SendTighteningCommand = new RelayCommand(SendTightening);
+            _startCommand = new RelayCommand(() => _ = StartAsync(), () => !IsRunning);
+            _stopCommand = new RelayCommand(() => Stop(), () => IsRunning);
         }
 
         private async Task StartAsync()
@@ -55,6 +71,7 @@ namespace DesoutterSimulatorWpf.ViewModels
             _engine.Stop();
             IsRunning = false;
             State.IsConnected = false;
+            State.LastSubscription = "无";
         }
 
         private void OnEngineStateChanged(object sender, SimulatorEngine.StateEventArgs e)
@@ -63,16 +80,18 @@ namespace DesoutterSimulatorWpf.ViewModels
             State.CurrentPsetId = e.CurrentPsetId;
             State.IsEnabled = e.IsEnabled;
             State.LastSubscription = e.LastSubscription;
+            StateChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void OnTighteningGenerated(object sender, TighteningResult result)
         {
             State.LastTighteningTime = DateTime.Now;
-            // 可由UI显示最近结果
         }
 
-        private void SendTightening()
+        public void SendTightening()
         {
+            if (!IsRunning) return;
+
             var result = new TighteningResult
             {
                 VIN = VIN,
@@ -89,7 +108,6 @@ namespace DesoutterSimulatorWpf.ViewModels
                 BatchStatus = 1,
                 TorqueStatus = 1,
                 AngleStatus = 1,
-                // 其他字段使用默认值
                 ParameterSetName = $"Pset_{PsetId:D3}",
                 Strategy = 2,
                 StrategyOptions = "00000",
@@ -99,28 +117,34 @@ namespace DesoutterSimulatorWpf.ViewModels
                 TorqueValuesUnit = 1,
                 CompensatedAngle = 0,
                 FinalAngleDecimal = 0,
-                // ...
+                RundownAngleStatus = 1,
+                CurrentMonitoringStatus = 1,
+                SelftapStatus = 1,
+                PrevailTorqueStatus = 1,
+                CompensateStatus = 1,
+                RundownAngleMin = 0,
+                RundownAngleMax = 100,
+                RundownAngle = 50,
+                CurrentMonitoringMin = 80,
+                CurrentMonitoringMax = 120,
+                CurrentMonitoringValue = 100,
+                SelftapMin = 1,
+                SelftapMax = 5,
+                SelftapTorque = 3,
+                PrevailTorqueMin = 1,
+                PrevailTorqueMax = 5,
+                PrevailTorque = 3,
+                JobSequence = 12345,
+                SyncTighteningId = 0,
+                ToolSerialNumber = "C341212025487",
             };
             _engine.SendTighteningResult(result);
         }
 
+        public void Dispose() => _engine.Stop();
+
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-    }
-
-    public class RelayCommand : ICommand
-    {
-        private readonly Action _execute;
-        private readonly Func<bool> _canExecute;
-        public RelayCommand(Action execute, Func<bool> canExecute = null)
-        {
-            _execute = execute;
-            _canExecute = canExecute;
-        }
-        public bool CanExecute(object parameter) => _canExecute == null || _canExecute();
-        public void Execute(object parameter) => _execute();
-        public event EventHandler CanExecuteChanged;
-        public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
     }
 }

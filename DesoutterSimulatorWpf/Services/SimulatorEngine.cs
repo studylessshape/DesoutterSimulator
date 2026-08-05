@@ -1,5 +1,4 @@
 using DesoutterSimulator.Protocol;
-using DesoutterSimulatorWpf.Models;
 using DesoutterSimulatorWpf.Services.Protocol;
 using System;
 using System.Net;
@@ -19,6 +18,8 @@ namespace DesoutterSimulatorWpf.Services
         private ControllerState _state = new ControllerState();
         private SubscriptionManager _subs = new SubscriptionManager();
         private int _currentSubscribedRevision = 1;
+        private NetworkStream _currentStream;
+        private readonly object _streamLock = new object();
 
         public event EventHandler<StateEventArgs> StateChanged;
         public event EventHandler<TighteningResult> TighteningGenerated;
@@ -41,7 +42,6 @@ namespace DesoutterSimulatorWpf.Services
             _listener = new TcpListener(IPAddress.Any, _port);
             _listener.Start();
 
-            // 通知UI连接状态
             RaiseStateChanged(isConnected: true);
 
             try
@@ -53,9 +53,9 @@ namespace DesoutterSimulatorWpf.Services
                 }
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex)
+            catch (Exception)
             {
-                // 日志
+                // 日志可忽略
             }
             finally
             {
@@ -69,6 +69,7 @@ namespace DesoutterSimulatorWpf.Services
         {
             _cts?.Cancel();
             _listener?.Stop();
+            lock (_streamLock) { _currentStream = null; }
         }
 
         private async Task HandleClientAsync(TcpClient client, CancellationToken token)
@@ -76,93 +77,115 @@ namespace DesoutterSimulatorWpf.Services
             using (client)
             using (var stream = client.GetStream())
             {
+                lock (_streamLock) { _currentStream = stream; }
+
                 var buffer = new byte[8192];
                 var messageBuffer = new StringBuilder();
 
-                while (!token.IsCancellationRequested && client.Connected)
+                try
                 {
-                    int bytesRead;
-                    try { bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token); }
-                    catch { break; }
-                    if (bytesRead == 0) break;
-
-                    var received = Encoding.ASCII.GetString(buffer, 0, bytesRead);
-                    messageBuffer.Append(received);
-
-                    while (messageBuffer.Length > 0)
+                    while (!token.IsCancellationRequested && client.Connected)
                     {
-                        int nulIdx = messageBuffer.ToString().IndexOf('\0');
-                        if (nulIdx < 0) break;
-                        var msgStr = messageBuffer.ToString(0, nulIdx);
-                        messageBuffer.Remove(0, nulIdx + 1);
+                        int bytesRead;
+                        try { bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token); }
+                        catch { break; }
+                        if (bytesRead == 0) break;
 
-                        if (!string.IsNullOrEmpty(msgStr))
+                        var received = Encoding.ASCII.GetString(buffer, 0, bytesRead);
+                        messageBuffer.Append(received);
+
+                        while (messageBuffer.Length > 0)
                         {
-                            var response = await ProcessMessageAsync(msgStr);
-                            if (response != null)
+                            int nulIdx = messageBuffer.ToString().IndexOf('\0');
+                            if (nulIdx < 0) break;
+                            var msgStr = messageBuffer.ToString(0, nulIdx);
+                            messageBuffer.Remove(0, nulIdx + 1);
+
+                            if (!string.IsNullOrEmpty(msgStr))
                             {
-                                var data = response.ToByteArray();
-                                await stream.WriteAsync(data, 0, data.Length, token);
+                                var response = await ProcessMessageAsync(msgStr);
+                                if (response != null)
+                                {
+                                    var data = response.ToByteArray();
+                                    await stream.WriteAsync(data, 0, data.Length, token);
+                                }
                             }
                         }
                     }
+                }
+                finally
+                {
+                    // 客户端断开，重置状态
+                    _state.CommunicationStarted = false;
+                    _subs.ClearAll();
+                    _currentSubscribedRevision = 1;
+                    lock (_streamLock) { _currentStream = null; }
+                    RaiseStateChanged(isConnected: false);
                 }
             }
         }
 
         private async Task<Message> ProcessMessageAsync(string msgStr)
         {
-            var msg = MessageParser.Parse(msgStr);
-            if (msg.MID == 9999) return msg; // Keep alive
+            try
+            {
+                var msg = MessageParser.Parse(msgStr);
+                if (msg.MID == 9999) return msg; // Keep alive
 
-            // 处理请求
-            var response = await HandleMessageAsync(msg);
-            return response;
+                // 处理请求
+                var response = await HandleMessageAsync(msg);
+                return response;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private Task<Message> HandleMessageAsync(Message request)
         {
             switch (request.MID)
             {
-                case 1: // Communication start
+                case 1:
                     if (_state.CommunicationStarted)
                         return Task.FromResult(MessageFactory.CreateCommandError(request.MID, 96));
                     _state.CommunicationStarted = true;
                     int rev = request.Revision > 0 ? request.Revision : 1;
                     return Task.FromResult(MessageFactory.CreateCommunicationStartAcknowledge(rev));
 
-                case 3: // Communication stop
+                case 3:
                     _state.CommunicationStarted = false;
                     return Task.FromResult(MessageFactory.CreateCommandAccepted(request.MID));
 
-                case 60: // Subscribe tightening
+                case 60:
                     if (_subs.HasSubscription("LastTightening"))
                         return Task.FromResult(MessageFactory.CreateCommandError(request.MID, 9));
                     _subs.AddSubscription("LastTightening", request.NoAckFlag == 1);
                     _currentSubscribedRevision = request.Revision > 0 ? request.Revision : 1;
+                    RaiseStateChanged();
                     return Task.FromResult(MessageFactory.CreateCommandAccepted(request.MID));
 
-                case 63: // Unsubscribe tightening
+                case 63:
                     if (!_subs.HasSubscription("LastTightening"))
                         return Task.FromResult(MessageFactory.CreateCommandError(request.MID, 10));
                     _subs.RemoveSubscription("LastTightening");
+                    RaiseStateChanged();
                     return Task.FromResult(MessageFactory.CreateCommandAccepted(request.MID));
 
-                case 42: // Disable tool
+                case 42:
                     _state.ToolEnabled = false;
                     RaiseStateChanged();
                     return Task.FromResult(MessageFactory.CreateCommandAccepted(request.MID));
 
-                case 43: // Enable tool
+                case 43:
                     _state.ToolEnabled = true;
                     RaiseStateChanged();
                     return Task.FromResult(MessageFactory.CreateCommandAccepted(request.MID));
 
-                case 10: // Parameter set ID upload request
+                case 10:
                     var ids = _state.GetParameterSetIDs();
                     return Task.FromResult(MessageFactory.CreateParameterSetIDUploadReply(ids));
 
-                // 其他MID可类似实现...
                 default:
                     return Task.FromResult(MessageFactory.CreateCommandError(request.MID, 99));
             }
@@ -172,14 +195,14 @@ namespace DesoutterSimulatorWpf.Services
         {
             if (!_subs.HasSubscription("LastTightening")) return;
             var msg = MessageFactory.CreateLastTighteningResult(result, _currentSubscribedRevision);
-            // 这里需要将消息发送给当前连接的客户端，简单起见，我们通过事件通知UI，由UI转发？
-            // 但SimulatorEngine需要维护客户端连接，才能发送。
-            // 改进：在HandleClientAsync中保存NetworkStream，此处使用保存的stream。
-            // 为简化，我们使用静态事件或委托，但这里略复杂。
-            // 实际实现中应维护当前连接的Stream列表，此处我们假设仅单客户端，通过字段保存。
-            // 为实现演示，我们在类内部维护一个Stream，但多客户端时需处理。
-            // 因为WPF版本允许每个枪单客户端，我们简化：每个Engine只维护一个连接。
-            // 修改：在HandleClientAsync中保存stream到字段 _currentStream，然后在发送时使用。
+            lock (_streamLock)
+            {
+                if (_currentStream == null || !_currentStream.CanWrite) return;
+                var data = msg.ToByteArray();
+                try { _currentStream.Write(data, 0, data.Length); }
+                catch { /* 忽略 */ }
+            }
+            TighteningGenerated?.Invoke(this, result);
         }
 
         private void RaiseStateChanged(bool isConnected = true)
