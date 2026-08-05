@@ -96,9 +96,10 @@
                                         VerticalAlignment="Center"
                                         Text="端口:" />
                                     <TextBox
-                                        Width="60"
+                                        Width="80"
                                         Margin="4,0,0,0"
                                         VerticalAlignment="Center"
+                                        IsEnabled="{Binding CanEditPort}"
                                         Text="{Binding Config.Port, UpdateSourceTrigger=LostFocus}" />
                                 </StackPanel>
                                 <TextBlock

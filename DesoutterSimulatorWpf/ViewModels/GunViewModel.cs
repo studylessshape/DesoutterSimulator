@@ -27,12 +27,16 @@ namespace DesoutterSimulatorWpf.ViewModels
                 {
                     _isRunning = value;
                     OnPropertyChanged();
+                    OnPropertyChanged(nameof(CanEditPort));
                     // 关键：通知命令重新评估 CanExecute
                     _startCommand.RaiseCanExecuteChanged();
                     _stopCommand.RaiseCanExecuteChanged();
                 }
             }
         }
+
+        /// <summary>端口号仅在启动前可编辑</summary>
+        public bool CanEditPort => !_isRunning;
 
         // 手动发送参数（绑定到UI）
         public double Torque { get; set; } = 10.0;
