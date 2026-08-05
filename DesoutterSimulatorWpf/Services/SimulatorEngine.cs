@@ -1,6 +1,8 @@
 using DesoutterSimulator.Protocol;
 using DesoutterSimulatorWpf.Services.Protocol;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -14,9 +16,9 @@ namespace DesoutterSimulatorWpf.Services
         private TcpListener _listener;
         private CancellationTokenSource _cts;
         private bool _isRunning;
-        private readonly int _port;
-        private ControllerState _state = new ControllerState();
-        private SubscriptionManager _subs = new SubscriptionManager();
+        private int _port;
+        private readonly ControllerState _state = new ControllerState();
+        private readonly SubscriptionManager _subs = new SubscriptionManager();
         private int _currentSubscribedRevision = 1;
         private NetworkStream _currentStream;
         private readonly object _streamLock = new object();
@@ -32,15 +34,27 @@ namespace DesoutterSimulatorWpf.Services
             public string LastSubscription { get; set; }
         }
 
+        public bool IsRunning => _isRunning;
+
+        /// <summary>监听端口，可在启动前修改，启动时生效。</summary>
+        public int Port
+        {
+            get => _port;
+            set => _port = value;
+        }
+
         public SimulatorEngine(int port) => _port = port;
 
         public async Task StartAsync()
         {
             if (_isRunning) return;
-            _isRunning = true;
             _cts = new CancellationTokenSource();
-            _listener = new TcpListener(IPAddress.Any, _port);
-            _listener.Start();
+
+            // 端口被占用等异常会在此处抛出，由调用方处理（_isRunning 保持 false）
+            var listener = new TcpListener(IPAddress.Any, Port);
+            listener.Start();
+            _listener = listener;
+            _isRunning = true;
 
             RaiseStateChanged(isConnected: true);
 
@@ -144,52 +158,316 @@ namespace DesoutterSimulatorWpf.Services
 
         private Task<Message> HandleMessageAsync(Message request)
         {
+            // 除通信启动/停止外，其余消息要求通信已启动
+            if (request.MID != 1 && request.MID != 3 && !_state.CommunicationStarted)
+                return Task.FromResult(MessageFactory.CreateCommandError(request.MID, 16));
+
             switch (request.MID)
             {
-                case 1:
-                    if (_state.CommunicationStarted)
-                        return Task.FromResult(MessageFactory.CreateCommandError(request.MID, 96));
-                    _state.CommunicationStarted = true;
-                    int rev = request.Revision > 0 ? request.Revision : 1;
-                    return Task.FromResult(MessageFactory.CreateCommunicationStartAcknowledge(rev));
+                // ===== 事件类消息，客户端不应发送 =====
+                case 61:   // MID 0061 Last tightening result data
+                case 65:   // MID 0065 Old tightening result upload reply
+                case 71:   // MID 0071 Alarm
+                case 74:   // MID 0074 Alarm acknowledged on controller
+                case 76:   // MID 0076 Alarm status
+                case 101:  // MID 0101 Multi-spindle result
+                case 106:  // MID 0106 Station data
+                case 107:  // MID 0107 Bolt data
+                    return Task.FromResult(MessageFactory.CreateCommandError(request.MID, 99));
 
-                case 3:
-                    _state.CommunicationStarted = false;
-                    return Task.FromResult(MessageFactory.CreateCommandAccepted(request.MID));
+                // ===== 通信消息 =====
+                case 1: return Task.FromResult(HandleCommunicationStart(request));
+                case 3: return Task.FromResult(HandleCommunicationStop(request));
 
-                case 60:
-                    if (_subs.HasSubscription("LastTightening"))
-                        return Task.FromResult(MessageFactory.CreateCommandError(request.MID, 9));
-                    _subs.AddSubscription("LastTightening", request.NoAckFlag == 1);
-                    _currentSubscribedRevision = request.Revision > 0 ? request.Revision : 1;
-                    RaiseStateChanged();
-                    return Task.FromResult(MessageFactory.CreateCommandAccepted(request.MID));
+                // ===== 参数集消息 =====
+                case 10: return Task.FromResult(HandleParameterSetIDUploadRequest());
+                case 12: return Task.FromResult(HandleParameterSetDataUploadRequest(request));
+                case 14: return Task.FromResult(HandleParameterSetSelectedSubscribe(request));
+                case 17: return Task.FromResult(HandleParameterSetSelectedUnsubscribe(request));
+                case 18: return Task.FromResult(HandleSelectParameterSet(request));
 
-                case 63:
-                    if (!_subs.HasSubscription("LastTightening"))
-                        return Task.FromResult(MessageFactory.CreateCommandError(request.MID, 10));
-                    _subs.RemoveSubscription("LastTightening");
-                    RaiseStateChanged();
-                    return Task.FromResult(MessageFactory.CreateCommandAccepted(request.MID));
+                // ===== 拧紧结果 =====
+                case 60: return Task.FromResult(HandleLastTighteningSubscribe(request));
+                case 63: return Task.FromResult(HandleLastTighteningUnsubscribe(request));
+                case 64: return Task.FromResult(HandleOldTighteningUploadRequest(request));
 
-                case 42:
-                    _state.ToolEnabled = false;
-                    RaiseStateChanged();
-                    return Task.FromResult(MessageFactory.CreateCommandAccepted(request.MID));
+                // ===== 报警 =====
+                case 70: return Task.FromResult(HandleAlarmSubscribe(request));
+                case 73: return Task.FromResult(HandleAlarmUnsubscribe(request));
+                case 78: return Task.FromResult(HandleAcknowledgeAlarm(request));
 
-                case 43:
-                    _state.ToolEnabled = true;
-                    RaiseStateChanged();
-                    return Task.FromResult(MessageFactory.CreateCommandAccepted(request.MID));
+                // ===== 工具 =====
+                case 40: return Task.FromResult(HandleToolDataUploadRequest(request));
+                case 42: return Task.FromResult(HandleDisableTool(request));
+                case 43: return Task.FromResult(HandleEnableTool(request));
 
-                case 10:
-                    var ids = _state.GetParameterSetIDs();
-                    return Task.FromResult(MessageFactory.CreateParameterSetIDUploadReply(ids));
+                // ===== Job =====
+                case 30: return Task.FromResult(HandleJobIDUploadRequest(request));
+                case 34: return Task.FromResult(HandleJobInfoSubscribe(request));
+                case 37: return Task.FromResult(HandleJobInfoUnsubscribe(request));
+                case 38: return Task.FromResult(HandleSelectJob(request));
+
+                // ===== VIN =====
+                case 51: return Task.FromResult(HandleVINSubscribe(request));
+                case 54: return Task.FromResult(HandleVINUnsubscribe(request));
+
+                // ===== 时间 =====
+                case 80: return Task.FromResult(HandleReadTimeRequest());
+
+                // ===== 控制器 =====
+                case 270: return Task.FromResult(HandleControllerReboot());
 
                 default:
                     return Task.FromResult(MessageFactory.CreateCommandError(request.MID, 99));
             }
         }
+
+        #region 消息处理器
+
+        private Message HandleCommunicationStart(Message request)
+        {
+            if (_state.CommunicationStarted)
+                return MessageFactory.CreateCommandError(request.MID, 96);
+            _state.CommunicationStarted = true;
+            int rev = request.Revision > 0 ? request.Revision : 1;
+            return MessageFactory.CreateCommunicationStartAcknowledge(rev);
+        }
+
+        private Message HandleCommunicationStop(Message request)
+        {
+            _state.CommunicationStarted = false;
+            return MessageFactory.CreateCommandAccepted(request.MID);
+        }
+
+        private Message HandleParameterSetIDUploadRequest()
+        {
+            var ids = _state.GetParameterSetIDs();
+            return MessageFactory.CreateParameterSetIDUploadReply(ids);
+        }
+
+        private Message HandleParameterSetDataUploadRequest(Message request)
+        {
+            var data = request.DataField;
+            if (data == null || data.Length < 3)
+                return MessageFactory.CreateCommandError(request.MID, 1);
+
+            if (!int.TryParse(data.Substring(0, 3), out int psetId))
+                return MessageFactory.CreateCommandError(request.MID, 1);
+
+            var pset = _state.GetParameterSet(psetId);
+            if (pset == null)
+                return MessageFactory.CreateCommandError(request.MID, 2);
+
+            int rev = request.Revision > 0 ? request.Revision : 1;
+            return MessageFactory.CreateParameterSetDataUploadReply(pset, rev);
+        }
+
+        private Message HandleParameterSetSelectedSubscribe(Message request)
+        {
+            if (_subs.HasSubscription("ParameterSetSelected"))
+                return MessageFactory.CreateCommandError(request.MID, 13);
+
+            _subs.AddSubscription("ParameterSetSelected", request.NoAckFlag == 1);
+            var pset = _state.GetCurrentParameterSet();
+            RaiseStateChanged();
+            return MessageFactory.CreateParameterSetSelected(pset);
+        }
+
+        private Message HandleParameterSetSelectedUnsubscribe(Message request)
+        {
+            if (!_subs.HasSubscription("ParameterSetSelected"))
+                return MessageFactory.CreateCommandError(request.MID, 14);
+            _subs.RemoveSubscription("ParameterSetSelected");
+            RaiseStateChanged();
+            return MessageFactory.CreateCommandAccepted(request.MID);
+        }
+
+        private Message HandleSelectParameterSet(Message request)
+        {
+            var data = request.DataField;
+            if (data == null || data.Length < 3)
+                return MessageFactory.CreateCommandError(request.MID, 1);
+
+            if (!int.TryParse(data.Substring(0, 3), out int psetId))
+                return MessageFactory.CreateCommandError(request.MID, 1);
+
+            if (!_state.SelectParameterSet(psetId))
+                return MessageFactory.CreateCommandError(request.MID, 3);
+
+            RaiseStateChanged();
+            return MessageFactory.CreateCommandAccepted(request.MID);
+        }
+
+        private Message HandleLastTighteningSubscribe(Message request)
+        {
+            if (_subs.HasSubscription("LastTightening"))
+                return MessageFactory.CreateCommandError(request.MID, 9);
+
+            // 支持的修订版本列表（包含自定义版本 7）
+            int[] supportedRevisions = { 1, 2, 3, 4, 5, 6, 7, 998, 999 };
+            int rev = request.Revision > 0 ? request.Revision : 1;
+            if (!Array.Exists(supportedRevisions, r => r == rev))
+                rev = 1;
+
+            _subs.AddSubscription("LastTightening", request.NoAckFlag == 1);
+            _currentSubscribedRevision = rev;
+            RaiseStateChanged();
+            return MessageFactory.CreateCommandAccepted(request.MID);
+        }
+
+        private Message HandleLastTighteningUnsubscribe(Message request)
+        {
+            if (!_subs.HasSubscription("LastTightening"))
+                return MessageFactory.CreateCommandError(request.MID, 10);
+            _subs.RemoveSubscription("LastTightening");
+            RaiseStateChanged();
+            return MessageFactory.CreateCommandAccepted(request.MID);
+        }
+
+        private Message HandleOldTighteningUploadRequest(Message request)
+        {
+            var data = request.DataField;
+            if (data == null || data.Length < 10)
+                return MessageFactory.CreateCommandError(request.MID, 1);
+
+            if (!long.TryParse(data, out _))
+                return MessageFactory.CreateCommandError(request.MID, 1);
+
+            // 模拟器无历史数据，返回错误 15（数据不存在）
+            return MessageFactory.CreateCommandError(request.MID, 15);
+        }
+
+        private Message HandleAlarmSubscribe(Message request)
+        {
+            if (_subs.HasSubscription("Alarm"))
+                return MessageFactory.CreateCommandError(request.MID, 11);
+
+            _subs.AddSubscription("Alarm", request.NoAckFlag == 1);
+            RaiseStateChanged();
+
+            if (_state.HasActiveAlarm())
+                return MessageFactory.CreateAlarmStatus(_state.GetActiveAlarm());
+
+            return MessageFactory.CreateCommandAccepted(request.MID);
+        }
+
+        private Message HandleAlarmUnsubscribe(Message request)
+        {
+            if (!_subs.HasSubscription("Alarm"))
+                return MessageFactory.CreateCommandError(request.MID, 12);
+            _subs.RemoveSubscription("Alarm");
+            RaiseStateChanged();
+            return MessageFactory.CreateCommandAccepted(request.MID);
+        }
+
+        private Message HandleAcknowledgeAlarm(Message request)
+        {
+            if (!_state.HasActiveAlarm())
+                return MessageFactory.CreateCommandError(request.MID, 58);
+            _state.AcknowledgeAlarm();
+            return MessageFactory.CreateCommandAccepted(request.MID);
+        }
+
+        private Message HandleToolDataUploadRequest(Message request)
+        {
+            var tool = _state.GetToolData();
+            int rev = request.Revision > 0 ? request.Revision : 1;
+            return MessageFactory.CreateToolDataUploadReply(tool, rev);
+        }
+
+        private Message HandleDisableTool(Message request)
+        {
+            _state.ToolEnabled = false;
+            RaiseStateChanged();
+            return MessageFactory.CreateCommandAccepted(request.MID);
+        }
+
+        private Message HandleEnableTool(Message request)
+        {
+            _state.ToolEnabled = true;
+            RaiseStateChanged();
+            return MessageFactory.CreateCommandAccepted(request.MID);
+        }
+
+        private Message HandleJobIDUploadRequest(Message request)
+        {
+            var ids = _state.GetJobIDs();
+            int rev = request.Revision > 0 ? request.Revision : 1;
+            return MessageFactory.CreateJobIDUploadReply(ids, rev);
+        }
+
+        private Message HandleJobInfoSubscribe(Message request)
+        {
+            if (_subs.HasSubscription("JobInfo"))
+                return MessageFactory.CreateCommandError(request.MID, 18);
+
+            _subs.AddSubscription("JobInfo", request.NoAckFlag == 1);
+            var info = _state.GetCurrentJobInfo();
+            RaiseStateChanged();
+            return MessageFactory.CreateJobInfo(info);
+        }
+
+        private Message HandleJobInfoUnsubscribe(Message request)
+        {
+            if (!_subs.HasSubscription("JobInfo"))
+                return MessageFactory.CreateCommandError(request.MID, 19);
+            _subs.RemoveSubscription("JobInfo");
+            RaiseStateChanged();
+            return MessageFactory.CreateCommandAccepted(request.MID);
+        }
+
+        private Message HandleSelectJob(Message request)
+        {
+            var data = request.DataField;
+            if (data == null || data.Length < 4)
+                return MessageFactory.CreateCommandError(request.MID, 1);
+
+            if (!int.TryParse(data, out int jobId))
+                return MessageFactory.CreateCommandError(request.MID, 1);
+
+            if (!_state.SelectJob(jobId))
+                return MessageFactory.CreateCommandError(request.MID, 20);
+
+            RaiseStateChanged();
+            return MessageFactory.CreateCommandAccepted(request.MID);
+        }
+
+        private Message HandleVINSubscribe(Message request)
+        {
+            if (_subs.HasSubscription("VIN"))
+                return MessageFactory.CreateCommandError(request.MID, 6);
+
+            _subs.AddSubscription("VIN", request.NoAckFlag == 1);
+            var vin = _state.GetVINData();
+            int rev = request.Revision > 0 ? request.Revision : 1;
+            RaiseStateChanged();
+            return MessageFactory.CreateVehicleIDNumber(vin, rev);
+        }
+
+        private Message HandleVINUnsubscribe(Message request)
+        {
+            if (!_subs.HasSubscription("VIN"))
+                return MessageFactory.CreateCommandError(request.MID, 7);
+            _subs.RemoveSubscription("VIN");
+            RaiseStateChanged();
+            return MessageFactory.CreateCommandAccepted(request.MID);
+        }
+
+        private Message HandleReadTimeRequest()
+        {
+            return MessageFactory.CreateReadTimeUploadReply(DateTime.Now);
+        }
+
+        private Message HandleControllerReboot()
+        {
+            _state.CommunicationStarted = false;
+            _subs.ClearAll();
+            _currentSubscribedRevision = 1;
+            RaiseStateChanged();
+            return MessageFactory.CreateCommandAccepted(270);
+        }
+
+        #endregion
 
         public void SendTighteningResult(TighteningResult result)
         {
@@ -207,13 +485,26 @@ namespace DesoutterSimulatorWpf.Services
 
         private void RaiseStateChanged(bool isConnected = true)
         {
+            var types = _subs.GetAllSubscriptionTypes().ToList();
+            string lastSub = types.Count == 0 ? "无" : string.Join(",", types.Select(SubscriptionDisplayName));
+
             StateChanged?.Invoke(this, new StateEventArgs
             {
                 IsConnected = isConnected,
                 IsEnabled = _state.ToolEnabled,
                 CurrentPsetId = _state.CurrentParameterSetId,
-                LastSubscription = _subs.HasSubscription("LastTightening") ? "拧紧" : "无"
+                LastSubscription = lastSub
             });
         }
+
+        private static string SubscriptionDisplayName(string type) => type switch
+        {
+            "LastTightening" => "拧紧",
+            "ParameterSetSelected" => "程序号选中",
+            "JobInfo" => "Job信息",
+            "VIN" => "VIN",
+            "Alarm" => "报警",
+            _ => type
+        };
     }
 }

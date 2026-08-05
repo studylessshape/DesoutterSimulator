@@ -180,7 +180,7 @@ namespace DesoutterSimulatorWpf.Services.Protocol
     public class ControllerState
     {
         public bool CommunicationStarted { get; set; }
-        public bool ToolEnabled { get; set; } = true;
+        public bool ToolEnabled { get; set; } = false;
         public int CurrentParameterSetId { get; set; } = 1;
         public int CurrentJobId { get; set; } = 0;
         public bool JobRunning { get; set; }

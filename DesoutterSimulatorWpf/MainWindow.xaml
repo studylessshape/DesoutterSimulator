@@ -88,10 +88,19 @@
                                     FontSize="14"
                                     FontWeight="Bold"
                                     Text="{Binding Config.Name}" />
-                                <TextBlock
+                                <StackPanel
                                     Grid.Row="1"
                                     Grid.Column="0"
-                                    Text="{Binding Config.Port, StringFormat='端口: {0}'}" />
+                                    Orientation="Horizontal">
+                                    <TextBlock
+                                        VerticalAlignment="Center"
+                                        Text="端口:" />
+                                    <TextBox
+                                        Width="60"
+                                        Margin="4,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Text="{Binding Config.Port, UpdateSourceTrigger=LostFocus}" />
+                                </StackPanel>
                                 <TextBlock
                                     Grid.Row="1"
                                     Grid.Column="1"

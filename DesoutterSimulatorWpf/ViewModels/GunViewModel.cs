@@ -62,7 +62,21 @@ namespace DesoutterSimulatorWpf.ViewModels
         {
             if (IsRunning) return;
             IsRunning = true;
-            await _engine.StartAsync();
+            try
+            {
+                // 启动前同步最新端口，支持启动前编辑端口号
+                _engine.Port = Config.Port;
+                await _engine.StartAsync();
+            }
+            catch
+            {
+                // 启动失败（端口被占用等），复位状态
+                IsRunning = false;
+            }
+
+            // StartAsync 返回意味着引擎已停止（主动 Stop 或意外异常），同步 UI 状态
+            if (!_engine.IsRunning)
+                IsRunning = false;
         }
 
         private void Stop()
@@ -116,7 +130,7 @@ namespace DesoutterSimulatorWpf.ViewModels
                 ResultType = 1,
                 TorqueValuesUnit = 1,
                 CompensatedAngle = 0,
-                FinalAngleDecimal = 0,
+                FinalAngleDecimal = Angle,
                 RundownAngleStatus = 1,
                 CurrentMonitoringStatus = 1,
                 SelftapStatus = 1,
