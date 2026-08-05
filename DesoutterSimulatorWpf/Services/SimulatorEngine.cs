@@ -25,6 +25,7 @@ namespace DesoutterSimulatorWpf.Services
 
         public event EventHandler<StateEventArgs> StateChanged;
         public event EventHandler<TighteningResult> TighteningGenerated;
+        public event EventHandler<string>? MessageLogged;
 
         public class StateEventArgs : EventArgs
         {
@@ -144,10 +145,13 @@ namespace DesoutterSimulatorWpf.Services
             try
             {
                 var msg = MessageParser.Parse(msgStr);
+                MessageLogged?.Invoke(this, $"收到 MID {msg.MID:D4}({MidDisplayName(msg.MID)}) 修订{msg.Revision} 数据='{msg.DataField}'");
                 if (msg.MID == 9999) return msg; // Keep alive
 
                 // 处理请求
                 var response = await HandleMessageAsync(msg);
+                if (response != null)
+                    MessageLogged?.Invoke(this, $"响应 MID {response.MID:D4}({MidDisplayName(response.MID)}) 修订{response.Revision} 数据='{response.DataField}'");
                 return response;
             }
             catch
@@ -155,6 +159,21 @@ namespace DesoutterSimulatorWpf.Services
                 return null;
             }
         }
+
+        private static string MidDisplayName(int mid) => mid switch
+        {
+            1 => "通信启动", 2 => "通信启动确认", 3 => "通信停止", 4 => "命令错误", 5 => "命令接受",
+            10 => "参数集ID上传请求", 11 => "参数集ID上传回复", 12 => "参数集数据上传请求", 13 => "参数集数据上传回复",
+            14 => "订阅参数集选中", 15 => "参数集选中", 17 => "退订参数集选中", 18 => "设定程序号",
+            30 => "Job ID上传请求", 31 => "Job ID上传回复", 34 => "订阅Job信息", 35 => "Job信息",
+            37 => "退订Job信息", 38 => "选择Job", 40 => "工具数据上传请求", 41 => "工具数据上传回复",
+            42 => "下使能", 43 => "上使能", 51 => "订阅VIN", 52 => "VIN号", 54 => "退订VIN",
+            60 => "订阅拧紧结果", 61 => "拧紧结果", 63 => "退订拧紧结果", 64 => "旧拧紧结果请求",
+            65 => "旧拧紧结果回复", 70 => "订阅报警", 71 => "报警", 73 => "退订报警", 74 => "报警确认",
+            76 => "报警状态", 78 => "确认报警", 80 => "读时间", 81 => "时间回复", 270 => "控制器重启",
+            9999 => "心跳",
+            _ => "未知"
+        };
 
         private Task<Message> HandleMessageAsync(Message request)
         {
@@ -473,6 +492,7 @@ namespace DesoutterSimulatorWpf.Services
         {
             if (!_subs.HasSubscription("LastTightening")) return;
             var msg = MessageFactory.CreateLastTighteningResult(result, _currentSubscribedRevision);
+            MessageLogged?.Invoke(this, $"发送 MID {msg.MID:D4}({MidDisplayName(msg.MID)}) 修订{msg.Revision} 数据长度={msg.DataField.Length}");
             lock (_streamLock)
             {
                 if (_currentStream == null || !_currentStream.CanWrite) return;

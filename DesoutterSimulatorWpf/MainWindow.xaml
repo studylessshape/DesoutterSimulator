@@ -34,10 +34,6 @@
                 Content="添加枪" />
             <Button
                 Margin="0,0,5,0"
-                Command="{Binding RemoveGunCommand}"
-                Content="移除枪" />
-            <Button
-                Margin="0,0,5,0"
                 Command="{Binding SaveConfigCommand}"
                 Content="保存配置" />
             <Button
@@ -56,199 +52,203 @@
                 SelectedItem="{Binding SelectedGun}" />
         </StackPanel>
 
-        <!--  左侧枪列表  -->
-        <ScrollViewer
+        <!--  左侧枪列表（点击选中）  -->
+        <ListBox
             Grid.Row="1"
             Grid.Column="0"
-            VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Guns}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border
-                            Margin="0,0,0,5"
-                            Padding="5"
-                            BorderThickness="1"
-                            CornerRadius="4">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
+            ItemsSource="{Binding Guns}"
+            SelectedItem="{Binding SelectedGun}"
+            ScrollViewer.VerticalScrollBarVisibility="Auto">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0,0,0,4" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border
+                        Padding="5"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
 
+                            <TextBlock
+                                Grid.Row="0"
+                                Grid.ColumnSpan="2"
+                                FontSize="14"
+                                FontWeight="Bold"
+                                Text="{Binding Config.Name}" />
+                            <StackPanel
+                                Grid.Row="1"
+                                Grid.Column="0"
+                                Orientation="Horizontal">
                                 <TextBlock
-                                    Grid.Row="0"
-                                    Grid.ColumnSpan="2"
-                                    FontSize="14"
-                                    FontWeight="Bold"
-                                    Text="{Binding Config.Name}" />
-                                <StackPanel
-                                    Grid.Row="1"
-                                    Grid.Column="0"
-                                    Orientation="Horizontal">
-                                    <TextBlock
-                                        VerticalAlignment="Center"
-                                        Text="端口:" />
-                                    <TextBox
-                                        Width="80"
-                                        Margin="4,0,0,0"
-                                        VerticalAlignment="Center"
-                                        IsEnabled="{Binding CanEditPort}"
-                                        Text="{Binding Config.Port, UpdateSourceTrigger=LostFocus}" />
-                                </StackPanel>
-                                <TextBlock
-                                    Grid.Row="1"
-                                    Grid.Column="1"
-                                    Foreground="{Binding State.IsConnected, Converter={StaticResource BoolToColor}}"
-                                    Text="{Binding State.IsConnected, Converter={StaticResource BoolToStatus}}" />
-                                <StackPanel
-                                    Grid.Row="2"
-                                    Grid.ColumnSpan="2"
-                                    Orientation="Horizontal">
-                                    <TextBlock Text="使能: " />
-                                    <TextBlock Text="{Binding State.IsEnabled}" />
-                                    <TextBlock Margin="10,0,0,0" Text="  程序号: " />
-                                    <TextBlock Text="{Binding State.CurrentPsetId}" />
-                                </StackPanel>
-                                <TextBlock
-                                    Grid.Row="3"
-                                    Grid.ColumnSpan="2"
-                                    Text="{Binding State.LastSubscription, StringFormat='订阅: {0}'}" />
-                                <StackPanel
-                                    Grid.Row="4"
-                                    Grid.ColumnSpan="2"
-                                    Margin="0,5,0,0"
-                                    Orientation="Horizontal">
-                                    <Button
-                                        Width="70"
-                                        Margin="0,0,5,0"
-                                        Command="{Binding StartCommand}"
-                                        Content="启动" />
-                                    <Button
-                                        Width="70"
-                                        Command="{Binding StopCommand}"
-                                        Content="停止" />
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+                                    VerticalAlignment="Center"
+                                    Text="端口:" />
+                                <TextBox
+                                    Width="80"
+                                    Margin="4,0,0,0"
+                                    VerticalAlignment="Center"
+                                    IsEnabled="{Binding CanEditPort}"
+                                    Text="{Binding Config.Port, UpdateSourceTrigger=LostFocus}" />
+                            </StackPanel>
+                            <TextBlock
+                                Grid.Row="1"
+                                Grid.Column="1"
+                                Foreground="{Binding State.IsConnected, Converter={StaticResource BoolToColor}}"
+                                Text="{Binding State.IsConnected, Converter={StaticResource BoolToStatus}}" />
+                            <StackPanel
+                                Grid.Row="2"
+                                Grid.ColumnSpan="2"
+                                Orientation="Horizontal">
+                                <TextBlock Text="使能: " />
+                                <TextBlock Text="{Binding State.IsEnabled}" />
+                                <TextBlock Margin="10,0,0,0" Text="  程序号: " />
+                                <TextBlock Text="{Binding State.CurrentPsetId}" />
+                            </StackPanel>
+                            <TextBlock
+                                Grid.Row="3"
+                                Grid.ColumnSpan="2"
+                                Text="{Binding State.LastSubscription, StringFormat='订阅: {0}'}" />
+                            <StackPanel
+                                Grid.Row="4"
+                                Grid.ColumnSpan="2"
+                                Margin="0,5,0,0"
+                                Orientation="Horizontal">
+                                <Button
+                                    Width="70"
+                                    Margin="0,0,5,0"
+                                    Command="{Binding StartCommand}"
+                                    Content="启动" />
+                                <Button
+                                    Width="70"
+                                    Margin="0,0,5,0"
+                                    Command="{Binding StopCommand}"
+                                    Content="停止" />
+                                <Button
+                                    Width="70"
+                                    Command="{Binding DataContext.RemoveGunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}"
+                                    Content="删除" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
 
-        <!--  右侧发送面板  -->
-        <Border
+        <!--  右侧面板：日志 / 发送拧紧结果  -->
+        <TabControl
             Grid.Row="1"
             Grid.Column="1"
-            Margin="10,0,0,5"
-            Padding="10"
-            BorderThickness="1"
-            CornerRadius="4">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <TextBlock
-                    Grid.Row="0"
-                    Margin="0,0,0,10"
-                    FontSize="16"
-                    FontWeight="Bold"
-                    Text="发送拧紧结果" />
-                <TextBlock
-                    Grid.Row="1"
-                    Margin="0,5,0,5"
-                    Text="目标枪:" />
-                <ComboBox
-                    Grid.Row="2"
-                    Margin="0,0,0,10"
-                    DisplayMemberPath="Config.Name"
-                    ItemsSource="{Binding Guns}"
-                    SelectedItem="{Binding SelectedGun}" />
-
-                <Grid Grid.Row="3">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+            Margin="10,0,0,5">
+            <TabItem Header="日志">
+                <ListBox
+                    Margin="5"
+                    FontFamily="Consolas"
+                    ItemsSource="{Binding SelectedGun.Logs}" />
+            </TabItem>
+            <TabItem Header="发送拧紧结果">
+                <Grid Margin="10">
                     <Grid.RowDefinitions>
-                        <RowDefinition />
-                        <RowDefinition />
-                        <RowDefinition />
-                        <RowDefinition />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock
                         Grid.Row="0"
-                        Grid.Column="0"
-                        Margin="0,5,5,5"
-                        VerticalAlignment="Center"
-                        Text="结果:" />
-                    <ComboBox
-                        Grid.Row="0"
-                        Grid.Column="1"
-                        Margin="0,5,0,5"
-                        ItemsSource="{Binding SelectedGun.Outcomes}"
-                        SelectedItem="{Binding SelectedGun.Outcome}" />
-                    <TextBlock
-                        Grid.Row="1"
-                        Grid.Column="0"
-                        Margin="0,5,5,5"
-                        VerticalAlignment="Center"
-                        Text="扭矩(Nm):" />
-                    <TextBox
-                        Grid.Row="1"
-                        Grid.Column="1"
-                        Margin="0,5,0,5"
-                        Text="{Binding SelectedGun.Torque}" />
-                    <TextBlock
-                        Grid.Row="2"
-                        Grid.Column="0"
-                        Margin="0,5,5,5"
-                        VerticalAlignment="Center"
-                        Text="角度(°):" />
-                    <TextBox
-                        Grid.Row="2"
-                        Grid.Column="1"
-                        Margin="0,5,0,5"
-                        Text="{Binding SelectedGun.Angle}" />
-                    <TextBlock
-                        Grid.Row="3"
-                        Grid.Column="0"
-                        Margin="0,5,5,5"
-                        VerticalAlignment="Center"
-                        Text="程序号:" />
-                    <TextBox
-                        Grid.Row="3"
-                        Grid.Column="1"
-                        Margin="0,5,0,5"
-                        Text="{Binding SelectedGun.PsetId}" />
-                </Grid>
+                        Margin="0,0,0,10"
+                        FontSize="16"
+                        FontWeight="Bold"
+                        Text="{Binding SelectedGun.Config.Name, StringFormat='发送拧紧结果 - {0}'}" />
 
-                <Button
-                    Grid.Row="4"
-                    Width="150"
-                    Margin="0,10,0,10"
-                    HorizontalAlignment="Right"
-                    Command="{Binding SendTighteningCommand}"
-                    Content="发送拧紧结果" />
-                <TextBlock
-                    Grid.Row="5"
-                    Margin="0,0,0,5"
-                    Foreground="Green"
-                    Text="{Binding SendResultMessage}" />
-            </Grid>
-        </Border>
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition />
+                            <RowDefinition />
+                            <RowDefinition />
+                            <RowDefinition />
+                        </Grid.RowDefinitions>
+                        <TextBlock
+                            Grid.Row="0"
+                            Grid.Column="0"
+                            Margin="0,5,5,5"
+                            VerticalAlignment="Center"
+                            Text="结果:" />
+                        <ComboBox
+                            Grid.Row="0"
+                            Grid.Column="1"
+                            Margin="0,5,0,5"
+                            ItemsSource="{Binding SelectedGun.Outcomes}"
+                            SelectedItem="{Binding SelectedGun.Outcome}" />
+                        <TextBlock
+                            Grid.Row="1"
+                            Grid.Column="0"
+                            Margin="0,5,5,5"
+                            VerticalAlignment="Center"
+                            Text="扭矩(Nm):" />
+                        <TextBox
+                            Grid.Row="1"
+                            Grid.Column="1"
+                            Margin="0,5,0,5"
+                            Text="{Binding SelectedGun.Torque}" />
+                        <TextBlock
+                            Grid.Row="2"
+                            Grid.Column="0"
+                            Margin="0,5,5,5"
+                            VerticalAlignment="Center"
+                            Text="角度(°):" />
+                        <TextBox
+                            Grid.Row="2"
+                            Grid.Column="1"
+                            Margin="0,5,0,5"
+                            Text="{Binding SelectedGun.Angle}" />
+                        <TextBlock
+                            Grid.Row="3"
+                            Grid.Column="0"
+                            Margin="0,5,5,5"
+                            VerticalAlignment="Center"
+                            Text="程序号:" />
+                        <TextBox
+                            Grid.Row="3"
+                            Grid.Column="1"
+                            Margin="0,5,0,5"
+                            Text="{Binding SelectedGun.PsetId}" />
+                    </Grid>
+
+                    <Button
+                        Grid.Row="2"
+                        Width="150"
+                        Margin="0,10,0,10"
+                        HorizontalAlignment="Right"
+                        Command="{Binding SendTighteningCommand}"
+                        Content="发送拧紧结果" />
+                    <TextBlock
+                        Grid.Row="3"
+                        Margin="0,0,0,5"
+                        Foreground="Green"
+                        Text="{Binding SendResultMessage}" />
+                </Grid>
+            </TabItem>
+        </TabControl>
 
         <StatusBar Grid.Row="2" Grid.ColumnSpan="2">
             <StatusBarItem>

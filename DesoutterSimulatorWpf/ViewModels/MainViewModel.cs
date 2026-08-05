@@ -64,22 +64,28 @@ namespace DesoutterSimulatorWpf.ViewModels
         }
 
         [RelayCommand(CanExecute = nameof(CanRemoveGun))]
-        private void RemoveGun()
+        private void RemoveGun(GunViewModel? gun)
         {
-            if (Guns.Count == 0) return;
+            if (gun == null || !Guns.Contains(gun)) return;
 
-            var last = Guns.Last();
-            if (SelectedGun == last)
-                SelectedGun = Guns.Count > 1 ? Guns[Guns.Count - 2] : null;
+            bool removingSelected = SelectedGun == gun;
+            int idx = Guns.IndexOf(gun);
 
-            last.StopCommand.Execute(null);
-            Guns.Remove(last);
+            gun.StopCommand.Execute(null);
+            Guns.Remove(gun);
+
+            if (removingSelected)
+            {
+                // 先移除再选相邻枪（优先前一项），避免指向已移出的对象
+                SelectedGun = Guns.Count > 0 ? Guns[Math.Max(0, idx - 1)] : null;
+            }
+
             SaveConfig();
             SendTighteningCommand.NotifyCanExecuteChanged();
             RemoveGunCommand.NotifyCanExecuteChanged();
         }
 
-        private bool CanRemoveGun() => Guns.Count > 0;
+        private bool CanRemoveGun(GunViewModel? gun) => gun != null;
 
         [RelayCommand]
         private void SaveConfig()

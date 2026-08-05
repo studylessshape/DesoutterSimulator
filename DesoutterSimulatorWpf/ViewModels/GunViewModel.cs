@@ -4,17 +4,24 @@ using DesoutterSimulatorWpf.Models;
 using DesoutterSimulatorWpf.Services;
 using DesoutterSimulatorWpf.Services.Protocol;
 using System;
+using System.Collections.ObjectModel;
 using System.Threading.Tasks;
+using System.Windows;
 
 namespace DesoutterSimulatorWpf.ViewModels
 {
     public partial class GunViewModel : ObservableObject, IDisposable
     {
+        private const int MaxLogCount = 1000;
+
         private readonly SimulatorEngine _engine;
         private readonly GunState _state = new GunState();
 
         public GunConfig Config { get; }
         public GunState State => _state;
+
+        /// <summary>枪日志，最新一条在最上方，最多保留 1000 条</summary>
+        public ObservableCollection<string> Logs { get; } = new ObservableCollection<string>();
 
         [ObservableProperty]
         private bool _isRunning;
@@ -46,6 +53,27 @@ namespace DesoutterSimulatorWpf.ViewModels
             _engine = new SimulatorEngine(config.Port);
             _engine.StateChanged += OnEngineStateChanged;
             _engine.TighteningGenerated += OnTighteningGenerated;
+            _engine.MessageLogged += (s, msg) => AddLog(msg);
+            AddLog($"枪 {Config.Name} 初始化完成(端口={Config.Port})");
+        }
+
+        /// <summary>添加日志（线程安全，自动切换到 UI 线程）</summary>
+        private void AddLog(string message)
+        {
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.CheckAccess())
+            {
+                AppendLog(message);
+                return;
+            }
+            dispatcher.InvokeAsync(() => AppendLog(message));
+        }
+
+        private void AppendLog(string message)
+        {
+            Logs.Insert(0, $"[{DateTime.Now:HH:mm:ss.fff}] {message}");
+            while (Logs.Count > MaxLogCount)
+                Logs.RemoveAt(Logs.Count - 1);
         }
 
         partial void OnIsRunningChanged(bool value)
@@ -61,6 +89,7 @@ namespace DesoutterSimulatorWpf.ViewModels
         {
             if (IsRunning) return;
             IsRunning = true;
+            AddLog($"启动监听，端口={Config.Port}");
             try
             {
                 // 启动前同步最新端口，支持启动前编辑端口号
@@ -70,6 +99,7 @@ namespace DesoutterSimulatorWpf.ViewModels
             catch
             {
                 // 启动失败（端口被占用等），复位状态
+                AddLog("启动失败：端口可能被占用");
                 IsRunning = false;
             }
 
@@ -88,6 +118,7 @@ namespace DesoutterSimulatorWpf.ViewModels
             IsRunning = false;
             State.IsConnected = false;
             State.LastSubscription = "无";
+            AddLog("已停止监听");
         }
 
         private bool CanStop() => IsRunning;
@@ -98,6 +129,7 @@ namespace DesoutterSimulatorWpf.ViewModels
             State.CurrentPsetId = e.CurrentPsetId;
             State.IsEnabled = e.IsEnabled;
             State.LastSubscription = e.LastSubscription;
+            AddLog($"状态：连接={(e.IsConnected ? "是" : "否")}，使能={(e.IsEnabled ? "ON" : "OFF")}，程序号={e.CurrentPsetId}，订阅={e.LastSubscription}");
             StateChanged?.Invoke(this, EventArgs.Empty);
         }
 
@@ -109,6 +141,7 @@ namespace DesoutterSimulatorWpf.ViewModels
         public void SendTightening()
         {
             if (!IsRunning) return;
+            AddLog($"发送拧紧结果：{(Outcome == TighteningOutcome.OK ? "OK" : "NG")}，扭矩={Torque:0.##}Nm，角度={Angle}°，程序号={PsetId}");
 
             var result = new TighteningResult
             {
