@@ -1,11 +1,9 @@
-using System;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
-using System.Windows.Input;
 using DesoutterSimulatorWpf.Models;
 using DesoutterSimulatorWpf.Services;
 using DesoutterSimulatorWpf.Services.Protocol;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Windows.Input;
 
 namespace DesoutterSimulatorWpf.ViewModels
 {
@@ -37,10 +35,13 @@ namespace DesoutterSimulatorWpf.ViewModels
         }
 
         // 手动发送参数（绑定到UI）
-        public string VIN { get; set; } = "VIN_TEST";
         public double Torque { get; set; } = 10.0;
         public int Angle { get; set; } = 180;
         public int PsetId { get; set; } = 1;
+
+        // 拧紧结果 OK/NG 设置（手动发送时使用）
+        public TighteningOutcome Outcome { get; set; } = TighteningOutcome.OK;
+        public TighteningOutcome[] Outcomes { get; } = { TighteningOutcome.OK, TighteningOutcome.NG };
 
         public ICommand StartCommand => _startCommand;
         public ICommand StopCommand => _stopCommand;
@@ -108,7 +109,7 @@ namespace DesoutterSimulatorWpf.ViewModels
 
             var result = new TighteningResult
             {
-                VIN = VIN,
+                VIN = "VIN_TEST",
                 Torque = Torque,
                 Angle = Angle,
                 PsetId = PsetId,
@@ -118,7 +119,7 @@ namespace DesoutterSimulatorWpf.ViewModels
                 JobId = 1,
                 ChannelId = 1,
                 CellId = 1,
-                Status = 1,
+                Status = (int)Outcome,
                 BatchStatus = 1,
                 TorqueStatus = 1,
                 AngleStatus = 1,
@@ -160,5 +161,12 @@ namespace DesoutterSimulatorWpf.ViewModels
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
+    /// <summary>拧紧结果状态，与 TighteningResult.Status 对应（0=NOK, 1=OK）</summary>
+    public enum TighteningOutcome
+    {
+        NG = 0,
+        OK = 1
     }
 }

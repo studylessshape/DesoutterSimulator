@@ -192,12 +192,13 @@
                         Grid.Column="0"
                         Margin="0,5,5,5"
                         VerticalAlignment="Center"
-                        Text="VIN:" />
-                    <TextBox
+                        Text="结果:" />
+                    <ComboBox
                         Grid.Row="0"
                         Grid.Column="1"
                         Margin="0,5,0,5"
-                        Text="{Binding SelectedGun.VIN}" />
+                        ItemsSource="{Binding SelectedGun.Outcomes}"
+                        SelectedItem="{Binding SelectedGun.Outcome}" />
                     <TextBlock
                         Grid.Row="1"
                         Grid.Column="0"
