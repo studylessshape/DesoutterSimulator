@@ -1,54 +1,42 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using DesoutterSimulatorWpf.Models;
 using DesoutterSimulatorWpf.Services;
 using DesoutterSimulatorWpf.Services.Protocol;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
-using System.Windows.Input;
+using System;
+using System.Threading.Tasks;
 
 namespace DesoutterSimulatorWpf.ViewModels
 {
-    public class GunViewModel : INotifyPropertyChanged, IDisposable
+    public partial class GunViewModel : ObservableObject, IDisposable
     {
         private readonly SimulatorEngine _engine;
         private readonly GunState _state = new GunState();
-        private bool _isRunning;
-        private readonly RelayCommand _startCommand;
-        private readonly RelayCommand _stopCommand;
 
         public GunConfig Config { get; }
         public GunState State => _state;
 
-        public bool IsRunning
-        {
-            get => _isRunning;
-            set
-            {
-                if (_isRunning != value)
-                {
-                    _isRunning = value;
-                    OnPropertyChanged();
-                    OnPropertyChanged(nameof(CanEditPort));
-                    // 关键：通知命令重新评估 CanExecute
-                    _startCommand.RaiseCanExecuteChanged();
-                    _stopCommand.RaiseCanExecuteChanged();
-                }
-            }
-        }
+        [ObservableProperty]
+        private bool _isRunning;
 
         /// <summary>端口号仅在启动前可编辑</summary>
         public bool CanEditPort => !_isRunning;
 
         // 手动发送参数（绑定到UI）
-        public double Torque { get; set; } = 10.0;
-        public int Angle { get; set; } = 180;
-        public int PsetId { get; set; } = 1;
+        [ObservableProperty]
+        private double _torque = 10.0;
+
+        [ObservableProperty]
+        private int _angle = 180;
+
+        [ObservableProperty]
+        private int _psetId = 1;
 
         // 拧紧结果 OK/NG 设置（手动发送时使用）
-        public TighteningOutcome Outcome { get; set; } = TighteningOutcome.OK;
-        public TighteningOutcome[] Outcomes { get; } = { TighteningOutcome.OK, TighteningOutcome.NG };
+        [ObservableProperty]
+        private TighteningOutcome _outcome = TighteningOutcome.OK;
 
-        public ICommand StartCommand => _startCommand;
-        public ICommand StopCommand => _stopCommand;
+        public TighteningOutcome[] Outcomes { get; } = { TighteningOutcome.OK, TighteningOutcome.NG };
 
         public event EventHandler StateChanged;
 
@@ -58,12 +46,18 @@ namespace DesoutterSimulatorWpf.ViewModels
             _engine = new SimulatorEngine(config.Port);
             _engine.StateChanged += OnEngineStateChanged;
             _engine.TighteningGenerated += OnTighteningGenerated;
-
-            _startCommand = new RelayCommand(() => _ = StartAsync(), () => !IsRunning);
-            _stopCommand = new RelayCommand(() => Stop(), () => IsRunning);
         }
 
-        private async Task StartAsync()
+        partial void OnIsRunningChanged(bool value)
+        {
+            // 关键：通知命令重新评估 CanExecute
+            StartCommand.NotifyCanExecuteChanged();
+            StopCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(CanEditPort));
+        }
+
+        [RelayCommand(CanExecute = nameof(CanStart))]
+        private async Task Start()
         {
             if (IsRunning) return;
             IsRunning = true;
@@ -84,6 +78,9 @@ namespace DesoutterSimulatorWpf.ViewModels
                 IsRunning = false;
         }
 
+        private bool CanStart() => !IsRunning;
+
+        [RelayCommand(CanExecute = nameof(CanStop))]
         private void Stop()
         {
             if (!IsRunning) return;
@@ -92,6 +89,8 @@ namespace DesoutterSimulatorWpf.ViewModels
             State.IsConnected = false;
             State.LastSubscription = "无";
         }
+
+        private bool CanStop() => IsRunning;
 
         private void OnEngineStateChanged(object sender, SimulatorEngine.StateEventArgs e)
         {
@@ -161,10 +160,6 @@ namespace DesoutterSimulatorWpf.ViewModels
         }
 
         public void Dispose() => _engine.Stop();
-
-        public event PropertyChangedEventHandler PropertyChanged;
-        protected void OnPropertyChanged([CallerMemberName] string name = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 
     /// <summary>拧紧结果状态，与 TighteningResult.Status 对应（0=NOK, 1=OK）</summary>

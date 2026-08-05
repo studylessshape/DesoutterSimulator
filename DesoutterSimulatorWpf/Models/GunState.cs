@@ -1,24 +1,23 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using System;
-using System.Collections.Generic;
 
 namespace DesoutterSimulatorWpf.Models
 {
-    public class GunState : System.ComponentModel.INotifyPropertyChanged
+    public partial class GunState : ObservableObject
     {
+        [ObservableProperty]
         private bool _isConnected;
+
+        [ObservableProperty]
         private bool _isEnabled;
+
+        [ObservableProperty]
         private int _currentPsetId = 1;
+
+        [ObservableProperty]
         private string _lastSubscription = "";
+
+        [ObservableProperty]
         private DateTime _lastTighteningTime;
-
-        public bool IsConnected { get => _isConnected; set { _isConnected = value; OnPropertyChanged(); } }
-        public bool IsEnabled { get => _isEnabled; set { _isEnabled = value; OnPropertyChanged(); } }
-        public int CurrentPsetId { get => _currentPsetId; set { _currentPsetId = value; OnPropertyChanged(); } }
-        public string LastSubscription { get => _lastSubscription; set { _lastSubscription = value; OnPropertyChanged(); } }
-        public DateTime LastTighteningTime { get => _lastTighteningTime; set { _lastTighteningTime = value; OnPropertyChanged(); } }
-
-        public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
-        protected void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string name = null)
-            => PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(name));
     }
 }
