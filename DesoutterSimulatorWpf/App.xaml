@@ -1,0 +1,14 @@
+<Application
+    x:Class="DesoutterSimulatorWpf.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converter="clr-namespace:DesoutterSimulatorWpf.Converters"
+    xmlns:local="clr-namespace:DesoutterSimulatorWpf"
+    StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <converter:BoolToColorConverter x:Key="BoolToColor" />
+            <converter:BoolToStatusConverter x:Key="BoolToStatus" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
