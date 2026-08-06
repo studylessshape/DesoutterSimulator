@@ -57,8 +57,8 @@
             Grid.Row="1"
             Grid.Column="0"
             ItemsSource="{Binding Guns}"
-            SelectedItem="{Binding SelectedGun}"
-            ScrollViewer.VerticalScrollBarVisibility="Auto">
+            ScrollViewer.VerticalScrollBarVisibility="Auto"
+            SelectedItem="{Binding SelectedGun}">
             <ListBox.ItemContainerStyle>
                 <Style TargetType="ListBoxItem">
                     <Setter Property="Padding" Value="0" />
@@ -87,29 +87,47 @@
 
                             <TextBlock
                                 Grid.Row="0"
-                                Grid.ColumnSpan="2"
+                                Grid.Column="0"
+                                VerticalAlignment="Center"
                                 FontSize="14"
                                 FontWeight="Bold"
                                 Text="{Binding Config.Name}" />
                             <StackPanel
-                                Grid.Row="1"
-                                Grid.Column="0"
+                                Grid.Row="0"
+                                Grid.Column="1"
                                 Orientation="Horizontal">
-                                <TextBlock
-                                    VerticalAlignment="Center"
-                                    Text="端口:" />
+                                <Border
+                                    Margin="0,0,4,0"
+                                    Padding="5,1"
+                                    Background="{Binding IsRunning, Converter={StaticResource BoolToColor}}"
+                                    CornerRadius="3">
+                                    <TextBlock
+                                        FontSize="11"
+                                        Foreground="White"
+                                        Text="{Binding IsRunning, Converter={StaticResource BoolToStatus}}" />
+                                </Border>
+                                <Border
+                                    Padding="5,1"
+                                    Background="{Binding State.IsConnected, Converter={StaticResource BoolToColor}}"
+                                    CornerRadius="3">
+                                    <TextBlock
+                                        FontSize="11"
+                                        Foreground="White"
+                                        Text="{Binding State.IsConnected, Converter={StaticResource BoolToStatus}, ConverterParameter=connect}" />
+                                </Border>
+                            </StackPanel>
+                            <StackPanel
+                                Grid.Row="1"
+                                Grid.ColumnSpan="2"
+                                Orientation="Horizontal">
+                                <TextBlock VerticalAlignment="Center" Text="端口:" />
                                 <TextBox
-                                    Width="80"
+                                    Width="120"
                                     Margin="4,0,0,0"
                                     VerticalAlignment="Center"
                                     IsEnabled="{Binding CanEditPort}"
                                     Text="{Binding Config.Port, UpdateSourceTrigger=LostFocus}" />
                             </StackPanel>
-                            <TextBlock
-                                Grid.Row="1"
-                                Grid.Column="1"
-                                Foreground="{Binding State.IsConnected, Converter={StaticResource BoolToColor}}"
-                                Text="{Binding State.IsConnected, Converter={StaticResource BoolToStatus}}" />
                             <StackPanel
                                 Grid.Row="2"
                                 Grid.ColumnSpan="2"
@@ -163,11 +181,11 @@
                         FontFamily="Consolas"
                         IsReadOnly="True"
                         IsReadOnlyCaretVisible="True"
-                        TextWrapping="NoWrap"
-                        VerticalScrollBarVisibility="Auto"
-                        Text="{Binding SelectedGun.LogText}"
                         PreviewMouseLeftButtonDown="LogTextBox_PreviewMouseLeftButtonDown"
-                        TextChanged="LogTextBox_TextChanged" />
+                        Text="{Binding SelectedGun.LogText}"
+                        TextChanged="LogTextBox_TextChanged"
+                        TextWrapping="NoWrap"
+                        VerticalScrollBarVisibility="Auto" />
                     <Button
                         x:Name="JumpToBottomButton"
                         Width="100"
@@ -176,9 +194,9 @@
                         Padding="8,0"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Bottom"
-                        Visibility="Collapsed"
                         Click="JumpToBottomButton_Click"
-                        Content="回到底部 ▼" />
+                        Content="回到底部 ▼"
+                        Visibility="Collapsed" />
                 </Grid>
             </TabItem>
             <TabItem Header="发送拧紧结果">

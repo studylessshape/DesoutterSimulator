@@ -57,7 +57,8 @@ namespace DesoutterSimulatorWpf.Services
             _listener = listener;
             _isRunning = true;
 
-            RaiseStateChanged(isConnected: true);
+            // 启动监听但尚无客户端连接，上报未连接
+            RaiseStateChanged(isConnected: false);
 
             try
             {
@@ -93,6 +94,9 @@ namespace DesoutterSimulatorWpf.Services
             using (var stream = client.GetStream())
             {
                 lock (_streamLock) { _currentStream = stream; }
+
+                // 收到客户端连接，上报已连接
+                RaiseStateChanged(isConnected: true);
 
                 var buffer = new byte[8192];
                 var messageBuffer = new StringBuilder();

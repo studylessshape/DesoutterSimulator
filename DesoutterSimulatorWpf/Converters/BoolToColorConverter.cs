@@ -21,8 +21,11 @@ namespace DesoutterSimulatorWpf.Converters
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is bool b && b) return "已启动";
-            return "未启动";
+            if (value is not bool b) return "";
+            // ConverterParameter: "connect"=未连接/已连接，其他=未启动/已启动
+            return (parameter as string) == "connect"
+                ? (b ? "已连接" : "未连接")
+                : (b ? "已启动" : "未启动");
         }
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotImplementedException();
