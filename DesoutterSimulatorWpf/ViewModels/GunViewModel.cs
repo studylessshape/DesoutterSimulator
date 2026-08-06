@@ -4,7 +4,6 @@ using DesoutterSimulatorWpf.Models;
 using DesoutterSimulatorWpf.Services;
 using DesoutterSimulatorWpf.Services.Protocol;
 using System;
-using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -20,8 +19,11 @@ namespace DesoutterSimulatorWpf.ViewModels
         public GunConfig Config { get; }
         public GunState State => _state;
 
-        /// <summary>枪日志，最新一条在最上方，最多保留 1000 条</summary>
-        public ObservableCollection<string> Logs { get; } = new ObservableCollection<string>();
+        /// <summary>枪日志文本（从上到下时间正序，最新在最下方，最多 1000 行）</summary>
+        [ObservableProperty]
+        private string _logText = "";
+
+        private readonly List<string> _logLines = new List<string>();
 
         [ObservableProperty]
         private bool _isRunning;
@@ -71,9 +73,12 @@ namespace DesoutterSimulatorWpf.ViewModels
 
         private void AppendLog(string message)
         {
-            Logs.Insert(0, $"[{DateTime.Now:HH:mm:ss.fff}] {message}");
-            while (Logs.Count > MaxLogCount)
-                Logs.RemoveAt(Logs.Count - 1);
+            _logLines.Add($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
+            // 超过上限时移除最旧（顶部）的日志
+            while (_logLines.Count > MaxLogCount)
+                _logLines.RemoveAt(0);
+            // 末尾追加空行，保证最后一行可点击定位（类似 VS 输出窗口）
+            LogText = string.Join(Environment.NewLine, _logLines) + Environment.NewLine;
         }
 
         partial void OnIsRunningChanged(bool value)

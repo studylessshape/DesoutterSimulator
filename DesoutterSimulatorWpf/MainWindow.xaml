@@ -156,10 +156,30 @@
             Grid.Column="1"
             Margin="10,0,0,5">
             <TabItem Header="日志">
-                <ListBox
-                    Margin="5"
-                    FontFamily="Consolas"
-                    ItemsSource="{Binding SelectedGun.Logs}" />
+                <Grid>
+                    <TextBox
+                        x:Name="LogTextBox"
+                        Margin="5"
+                        FontFamily="Consolas"
+                        IsReadOnly="True"
+                        IsReadOnlyCaretVisible="True"
+                        TextWrapping="NoWrap"
+                        VerticalScrollBarVisibility="Auto"
+                        Text="{Binding SelectedGun.LogText}"
+                        PreviewMouseLeftButtonDown="LogTextBox_PreviewMouseLeftButtonDown"
+                        TextChanged="LogTextBox_TextChanged" />
+                    <Button
+                        x:Name="JumpToBottomButton"
+                        Width="100"
+                        Height="28"
+                        Margin="0,0,14,14"
+                        Padding="8,0"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Bottom"
+                        Visibility="Collapsed"
+                        Click="JumpToBottomButton_Click"
+                        Content="回到底部 ▼" />
+                </Grid>
             </TabItem>
             <TabItem Header="发送拧紧结果">
                 <Grid Margin="10">
