@@ -99,6 +99,9 @@ namespace DesoutterSimulatorWpf.ViewModels
         [RelayCommand]
         private void LoadConfig()
         {
+            // 先停止所有正在运行的枪，释放端口，避免重建后端口被占用
+            foreach (var gun in Guns)
+                gun.StopCommand.Execute(null);
             Guns.Clear();
             if (File.Exists(CONFIG_FILE))
             {
