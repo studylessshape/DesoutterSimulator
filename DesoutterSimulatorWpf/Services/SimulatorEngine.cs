@@ -22,6 +22,9 @@ namespace DesoutterSimulatorWpf.Services
         private int _currentSubscribedRevision = 1;
         private NetworkStream _currentStream;
         private readonly object _streamLock = new object();
+        // 会话代际：每次新连接递增；旧连接清理时仅当自己仍是当前会话才执行，避免误清新连接状态
+        private int _sessionEpoch;
+        private readonly object _sessionLock = new object();
 
         public event EventHandler<StateEventArgs> StateChanged;
         public event EventHandler<TighteningResult> TighteningGenerated;
@@ -90,7 +93,7 @@ namespace DesoutterSimulatorWpf.Services
             _listener?.Stop();
             // 停止时复位使能，重新启动后需客户端重新上使能（与真机行为一致）
             _state.ToolEnabled = false;
-            lock (_streamLock) { _currentStream = null; }
+            lock (_sessionLock) { _currentStream = null; }
         }
 
         private async Task HandleClientAsync(TcpClient client, CancellationToken token)
@@ -98,7 +101,20 @@ namespace DesoutterSimulatorWpf.Services
             using (client)
             using (var stream = client.GetStream())
             {
-                lock (_streamLock) { _currentStream = stream; }
+                // Stop 后已被 accept 但尚未处理的连接不再接管会话
+                if (token.IsCancellationRequested) return;
+
+                // 接管当前会话：与旧连接清理互斥（同一把锁），分配代际、设置发送流、重置会话状态
+                int myEpoch;
+                lock (_sessionLock)
+                {
+                    myEpoch = ++_sessionEpoch;
+                    _currentStream = stream;
+                    _state.CommunicationStarted = false;
+                    _state.ToolEnabled = false;
+                    _subs.ClearAll();
+                    _currentSubscribedRevision = 1;
+                }
 
                 // 收到客户端连接，上报已连接
                 RaiseStateChanged(isConnected: true);
@@ -139,13 +155,23 @@ namespace DesoutterSimulatorWpf.Services
                 }
                 finally
                 {
-                    // 客户端断开，重置状态（使能同步复位，重连后需重新上使能）
-                    _state.CommunicationStarted = false;
-                    _state.ToolEnabled = false;
-                    _subs.ClearAll();
-                    _currentSubscribedRevision = 1;
-                    lock (_streamLock) { _currentStream = null; }
-                    RaiseStateChanged(isConnected: false);
+                    // 与接管互斥：仅当自己仍是当前会话时才清理，避免旧连接清理误清新连接的状态
+                    bool notifyDisconnected = false;
+                    lock (_sessionLock)
+                    {
+                        if (_sessionEpoch == myEpoch)
+                        {
+                            // 客户端断开，重置状态（使能同步复位，重连后需重新上使能）
+                            _state.CommunicationStarted = false;
+                            _state.ToolEnabled = false;
+                            _subs.ClearAll();
+                            _currentSubscribedRevision = 1;
+                            _currentStream = null;
+                            notifyDisconnected = true;
+                        }
+                    }
+                    if (notifyDisconnected)
+                        RaiseStateChanged(isConnected: false);
                 }
             }
         }
@@ -503,11 +529,15 @@ namespace DesoutterSimulatorWpf.Services
             if (!_subs.HasSubscription("LastTightening")) return;
             var msg = MessageFactory.CreateLastTighteningResult(result, _currentSubscribedRevision);
             MessageLogged?.Invoke(this, $"发送 MID {msg.MID:D4}({MidDisplayName(msg.MID)}) 修订{msg.Revision} 数据长度={msg.DataField.Length}");
+
+            // 读当前发送流（与接管/清理同一把锁），写流时独占
+            NetworkStream stream;
+            lock (_sessionLock) { stream = _currentStream; }
+            if (stream == null || !stream.CanWrite) return;
+            var data = msg.ToByteArray();
             lock (_streamLock)
             {
-                if (_currentStream == null || !_currentStream.CanWrite) return;
-                var data = msg.ToByteArray();
-                try { _currentStream.Write(data, 0, data.Length); }
+                try { stream.Write(data, 0, data.Length); }
                 catch { /* 忽略 */ }
             }
             TighteningGenerated?.Invoke(this, result);
