@@ -51,6 +51,9 @@ namespace DesoutterSimulatorWpf.Services
             if (_isRunning) return;
             _cts = new CancellationTokenSource();
 
+            // 使能状态复位，防止上次运行残留（即使后续启动失败也已复位）
+            _state.ToolEnabled = false;
+
             // 端口被占用等异常会在此处抛出，由调用方处理（_isRunning 保持 false）
             var listener = new TcpListener(IPAddress.Any, Port);
             listener.Start();
@@ -85,6 +88,8 @@ namespace DesoutterSimulatorWpf.Services
         {
             _cts?.Cancel();
             _listener?.Stop();
+            // 停止时复位使能，重新启动后需客户端重新上使能（与真机行为一致）
+            _state.ToolEnabled = false;
             lock (_streamLock) { _currentStream = null; }
         }
 
@@ -134,8 +139,9 @@ namespace DesoutterSimulatorWpf.Services
                 }
                 finally
                 {
-                    // 客户端断开，重置状态
+                    // 客户端断开，重置状态（使能同步复位，重连后需重新上使能）
                     _state.CommunicationStarted = false;
+                    _state.ToolEnabled = false;
                     _subs.ClearAll();
                     _currentSubscribedRevision = 1;
                     lock (_streamLock) { _currentStream = null; }

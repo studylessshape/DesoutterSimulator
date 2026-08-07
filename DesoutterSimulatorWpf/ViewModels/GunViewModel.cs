@@ -106,6 +106,7 @@ namespace DesoutterSimulatorWpf.ViewModels
                 // 启动失败（端口被占用等），复位状态
                 AddLog("启动失败：端口可能被占用");
                 IsRunning = false;
+                State.IsEnabled = false;
             }
 
             // StartAsync 返回意味着引擎已停止（主动 Stop 或意外异常），同步 UI 状态
@@ -122,6 +123,7 @@ namespace DesoutterSimulatorWpf.ViewModels
             _engine.Stop();
             IsRunning = false;
             State.IsConnected = false;
+            State.IsEnabled = false;
             State.LastSubscription = "无";
             AddLog("已停止监听");
         }
